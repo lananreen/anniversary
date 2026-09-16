@@ -1,3 +1,17 @@
+@font-face {
+  font-family: 'DRUNK FONT';
+  src: url('./assets/fonts/DRUNKFONTS-Regular.otf') format('opentype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+.app-wrapper {
+  position: relative;
+  width: 100%;
+  min-height: 100%;
+}
+
 .hero-section {
   position: relative;
   width: 100vw;
@@ -16,4 +30,57 @@
   color: white;
 }
 
+.hero-text {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.1em;
+  z-index: 0;
+  pointer-events: none;
+  user-select: none;
+}
 
+.hero-text span {
+  font-family: 'DRUNK FONT';
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: rgba(255, 244, 145, 0.541);
+  text-shadow: 0 0 60px rgba(255, 255, 255, 0.15), 0 0 120px rgba(255, 255, 255, 0.05);
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.hero-text-happy {
+  font-size: 18vw;
+}
+
+.hero-text-anniversary {
+  font-size: 11.5vw;
+}
+
+.gallery-section {
+  position: relative;
+  width: 100vw;
+  height: 90vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  z-index: 1;
+}
+
+.gallery-section .circular-gallery {
+  width: 100%;
+  height: 100%;
+}
+
+.gallery-text {
+  font-size: 3rem;
+  color: rgba(219, 201, 100, 0.8);
+  text-shadow: 0 0 60px rgba(255, 255, 255, 0.15), 0 0 120px rgba(255, 255, 255, 0.05);
+  margin-bottom: 0.2rem;
+  text-align: center;
+}
