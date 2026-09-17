@@ -239,7 +239,6 @@ class Media {
         void main() {
           vUv = uv;
           vec3 p = position;
-          p.z = (sin(p.x * 4.0 + uTime) * 1.5 + cos(p.y * 2.0 + uTime) * 1.5) * (0.1 + uSpeed * 0.5);
           gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
         }
       `,
@@ -338,6 +337,11 @@ class Media {
     this.program.uniforms.uTime.value += 0.04;
     this.program.uniforms.uSpeed.value = this.speed;
 
+    const targetScale = this.isHovered ? 1.15 : 1;
+    this.currentScale = lerp(this.currentScale || 1, targetScale, 0.12);
+    this.plane.scale.x = this.baseScaleX * this.currentScale;
+    this.plane.scale.y = this.baseScaleY * this.currentScale;
+
     const planeOffset = this.plane.scale.x / 2;
     const viewportOffset = this.viewport.width / 2;
     this.isBefore = this.plane.position.x + planeOffset < -viewportOffset;
@@ -360,8 +364,10 @@ class Media {
       }
     }
     this.scale = this.screen.height / 2000;
-    this.plane.scale.y = (this.viewport.height * (900 * this.scale)) / this.screen.height;
-    this.plane.scale.x = (this.viewport.width * (700 * this.scale)) / this.screen.width;
+    this.baseScaleY = (this.viewport.height * (900 * this.scale)) / this.screen.height;
+    this.baseScaleX = (this.viewport.width * (700 * this.scale)) / this.screen.width;
+    this.plane.scale.y = this.baseScaleY * (this.currentScale || 1);
+    this.plane.scale.x = this.baseScaleX * (this.currentScale || 1);
     this.plane.program.uniforms.uPlaneSizes.value = [this.plane.scale.x, this.plane.scale.y];
     this.padding = 2;
     this.width = this.plane.scale.x + this.padding;
@@ -388,6 +394,7 @@ class App {
     this.scrollSpeed = scrollSpeed;
     this.scroll = { ease: scrollEase, current: 0, target: 0, last: 0 };
     this.onCheckDebounce = debounce(this.onCheck, 200);
+    this.mouse = { x: 0, y: 0 };
     this.createRenderer();
     this.createCamera();
     this.createScene();
@@ -501,6 +508,36 @@ class App {
     }
   }
 
+  onMouseMove(e) {
+    const rect = this.container.getBoundingClientRect();
+    const normalizedX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    const normalizedY = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+    this.mouse.x = normalizedX;
+    this.mouse.y = normalizedY;
+
+    let hovered = false;
+    if (this.medias) {
+      this.medias.forEach(media => {
+        const halfW = media.plane.scale.x / 2;
+        const halfH = media.plane.scale.y / 2;
+        const px = media.plane.position.x;
+        const py = media.plane.position.y;
+        const worldX = normalizedX * (this.viewport.width / 2);
+        const worldY = normalizedY * (this.viewport.height / 2);
+        if (
+          worldX >= px - halfW && worldX <= px + halfW &&
+          worldY >= py - halfH && worldY <= py + halfH
+        ) {
+          media.isHovered = true;
+          hovered = true;
+        } else {
+          media.isHovered = false;
+        }
+      });
+    }
+    this.container.style.cursor = hovered ? 'pointer' : '';
+  }
+
   onCheck() {
     if (!this.medias || !this.medias[0]) return;
     const width = this.medias[0].width;
@@ -541,6 +578,7 @@ class App {
     this.boundOnTouchMove = this.onTouchMove.bind(this);
     this.boundOnTouchUp = this.onTouchUp.bind(this);
     this.boundOnKeyDown = this.onKeyDown.bind(this);
+    this.boundOnMouseMove = this.onMouseMove.bind(this);
 
     window.addEventListener('resize', this.boundOnResize);
     this.container?.addEventListener('mousedown', this.boundOnTouchDown);
@@ -549,6 +587,7 @@ class App {
     this.container?.addEventListener('touchstart', this.boundOnTouchDown);
     window.addEventListener('touchmove', this.boundOnTouchMove);
     window.addEventListener('touchend', this.boundOnTouchUp);
+    this.container?.addEventListener('mousemove', this.boundOnMouseMove);
 
     this.container?.addEventListener('keydown', this.boundOnKeyDown);
   }
@@ -561,6 +600,7 @@ class App {
     this.container?.removeEventListener('touchstart', this.boundOnTouchDown);
     window.removeEventListener('touchmove', this.boundOnTouchMove);
     window.removeEventListener('touchend', this.boundOnTouchUp);
+    this.container?.removeEventListener('mousemove', this.boundOnMouseMove);
     if (this.renderer && this.renderer.gl && this.renderer.gl.canvas.parentNode) {
       this.renderer.gl.canvas.parentNode.removeChild(this.renderer.gl.canvas);
     }

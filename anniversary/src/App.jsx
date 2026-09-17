@@ -3,12 +3,6 @@ import TiltedCard from './TiltedCard'
 import CircularGallery from './CircularGallery'
 import './App.css'
 
-const COLORS = [
-  '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4',
-  '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F',
-  '#BB8FCE', '#85C1E9', '#F8C471', '#82E0AA', '#D5C4A1'
-];
-
 const MONTHS = [
   'September 2025', 'October 2025', 'November 2025',
   'December 2025', 'January 2026', 'February 2026', 'March 2026',
@@ -16,10 +10,8 @@ const MONTHS = [
   'September 2026'
 ];
 
-const galleryItems = MONTHS.map((month, i) => ({
-  image: `data:image/svg+xml,${encodeURIComponent(
-    `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600"><rect fill="${COLORS[i]}" width="800" height="600"/></svg>`
-  )}`,
+const galleryItems = MONTHS.map((month) => ({
+  image: `/images/${month.toLowerCase()}.jpeg`,
   text: month
 }));
 
