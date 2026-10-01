@@ -1,0 +1,23 @@
+.scroll-reveal {
+  position: relative;
+  margin: 0;
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+}
+
+.scroll-reveal-text {
+  margin: 0;
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+}
+
+.scroll-reveal .word {
+  display: inline-block;
+  will-change: transform, opacity, filter;
+}
