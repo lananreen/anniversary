@@ -1,5 +1,8 @@
 import { Camera, Mesh, Plane, Program, Renderer, Texture, Transform } from 'ogl';
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+
+const LIGHTBOX_CLOSE_DURATION = 360;
 
 import './CircularGallery.css';
 
@@ -25,7 +28,7 @@ function autoBind(instance) {
 }
 
 const DEFAULT_FONT = 'bold 30px Figtree';
-const DEFAULT_FONT_URL = 'https://fonts.googleapis.com/css2?family=Figtree:wght@400;700&display=swap';
+const DEFAULT_FONT_URL = 'https://fonts.googleapis.com/css2?family=Figtree:wght@300..900&display=swap';
 
 function deriveFontFamilyFromUrl(url) {
   const fileName = (url.split('/').pop() || 'custom-font').split('?')[0];
@@ -194,6 +197,7 @@ class Media {
     scene,
     screen,
     text,
+    data,
     viewport,
     bend,
     textColor,
@@ -210,6 +214,7 @@ class Media {
     this.scene = scene;
     this.screen = screen;
     this.text = text;
+    this.data = data;
     this.viewport = viewport;
     this.bend = bend;
     this.textColor = textColor;
@@ -386,15 +391,20 @@ class App {
       borderRadius = 0,
       font = 'bold 30px Figtree',
       scrollSpeed = 2,
-      scrollEase = 0.05
+      scrollEase = 0.05,
+      onItemClick = null
     } = {}
   ) {
     document.documentElement.classList.remove('no-js');
     this.container = container;
     this.scrollSpeed = scrollSpeed;
+    this.onItemClick = onItemClick;
     this.scroll = { ease: scrollEase, current: 0, target: 0, last: 0 };
     this.onCheckDebounce = debounce(this.onCheck, 200);
     this.mouse = { x: 0, y: 0 };
+    this.isDown = false;
+    this.dragged = false;
+    this.pressedMedia = null;
     this.createRenderer();
     this.createCamera();
     this.createScene();
@@ -458,6 +468,7 @@ class App {
         scene: this.scene,
         screen: this.screen,
         text: data.text,
+        data,
         viewport: this.viewport,
         bend,
         textColor,
@@ -467,23 +478,36 @@ class App {
     });
   }
   onTouchDown(e) {
+    if (this.isModalOpen) return;
     this.isDown = true;
+    this.dragged = false;
     this.scroll.position = this.scroll.current;
-    this.start = e.touches ? e.touches[0].clientX : e.clientX;
+    const point = e.touches ? e.touches[0] : e;
+    this.start = point.clientX;
+    this.pressedMedia = this.getMediaAt(point.clientX, point.clientY);
     e.preventDefault();
   }
   onTouchMove(e) {
     if (!this.isDown) return;
     e.preventDefault();
     const x = e.touches ? e.touches[0].clientX : e.clientX;
+    if (Math.abs(this.start - x) > 6) this.dragged = true;
     const distance = (this.start - x) * (this.scrollSpeed * 0.025);
     this.scroll.target = this.scroll.position + distance;
   }
   onTouchUp() {
+    const pressed = this.pressedMedia;
+    const dragged = this.dragged;
     this.isDown = false;
+    this.pressedMedia = null;
+    this.dragged = false;
+    if (pressed && !dragged && typeof this.onItemClick === 'function') {
+      this.onItemClick(pressed.data);
+    }
     this.onCheck();
   }
   onKeyDown(e) {
+    if (this.isModalOpen) return;
     switch (e.key) {
       case 'ArrowRight':
         e.preventDefault();
@@ -508,6 +532,28 @@ class App {
     }
   }
 
+  getMediaAt(clientX, clientY) {
+    if (!this.medias) return null;
+    const rect = this.container.getBoundingClientRect();
+    const normalizedX = ((clientX - rect.left) / rect.width) * 2 - 1;
+    const normalizedY = -((clientY - rect.top) / rect.height) * 2 + 1;
+    const worldX = normalizedX * (this.viewport.width / 2);
+    const worldY = normalizedY * (this.viewport.height / 2);
+    for (const media of this.medias) {
+      const halfW = media.plane.scale.x / 2;
+      const halfH = media.plane.scale.y / 2;
+      const px = media.plane.position.x;
+      const py = media.plane.position.y;
+      if (
+        worldX >= px - halfW && worldX <= px + halfW &&
+        worldY >= py - halfH && worldY <= py + halfH
+      ) {
+        return media;
+      }
+    }
+    return null;
+  }
+
   onMouseMove(e) {
     const rect = this.container.getBoundingClientRect();
     const normalizedX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
@@ -515,27 +561,13 @@ class App {
     this.mouse.x = normalizedX;
     this.mouse.y = normalizedY;
 
-    let hovered = false;
+    const hoveredMedia = this.getMediaAt(e.clientX, e.clientY);
     if (this.medias) {
       this.medias.forEach(media => {
-        const halfW = media.plane.scale.x / 2;
-        const halfH = media.plane.scale.y / 2;
-        const px = media.plane.position.x;
-        const py = media.plane.position.y;
-        const worldX = normalizedX * (this.viewport.width / 2);
-        const worldY = normalizedY * (this.viewport.height / 2);
-        if (
-          worldX >= px - halfW && worldX <= px + halfW &&
-          worldY >= py - halfH && worldY <= py + halfH
-        ) {
-          media.isHovered = true;
-          hovered = true;
-        } else {
-          media.isHovered = false;
-        }
+        media.isHovered = media === hoveredMedia;
       });
     }
-    this.container.style.cursor = hovered ? 'pointer' : '';
+    this.container.style.cursor = hoveredMedia ? 'pointer' : '';
   }
 
   onCheck() {
@@ -622,6 +654,51 @@ export default function CircularGallery({
   scrollEase = 0.05
 }) {
   const containerRef = useRef(null);
+  const appRef = useRef(null);
+  const lightboxRef = useRef(null);
+  const selectedRef = useRef(null);
+  const closingRef = useRef(false);
+  const closeTimerRef = useRef(null);
+  const [selected, setSelected] = useState(null);
+  const [isClosing, setIsClosing] = useState(false);
+  const [isBackdropReady, setIsBackdropReady] = useState(false);
+
+  const requestClose = useCallback(() => {
+    if (!selectedRef.current || closingRef.current) return;
+    closingRef.current = true;
+    setIsClosing(true);
+    closeTimerRef.current = window.setTimeout(() => {
+      closeTimerRef.current = null;
+      closingRef.current = false;
+      setIsBackdropReady(false);
+      setSelected(null);
+      setIsClosing(false);
+    }, LIGHTBOX_CLOSE_DURATION);
+  }, []);
+
+  useEffect(() => {
+    if (!selected) return;
+    let secondFrame;
+    const firstFrame = requestAnimationFrame(() => {
+      secondFrame = requestAnimationFrame(() => setIsBackdropReady(true));
+    });
+    return () => {
+      cancelAnimationFrame(firstFrame);
+      if (secondFrame) cancelAnimationFrame(secondFrame);
+    };
+  }, [selected]);
+
+  useEffect(() => {
+    return () => {
+      if (closeTimerRef.current) window.clearTimeout(closeTimerRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    selectedRef.current = selected;
+    if (appRef.current) appRef.current.isModalOpen = Boolean(selected);
+  }, [selected]);
+
   useEffect(() => {
     if (!containerRef.current) return;
     let app;
@@ -635,15 +712,74 @@ export default function CircularGallery({
         borderRadius,
         font: resolvedFont,
         scrollSpeed,
-        scrollEase
+        scrollEase,
+        onItemClick: item => setSelected(item)
       });
+      app.isModalOpen = Boolean(selectedRef.current);
+      appRef.current = app;
     });
 
     return () => {
       isMounted = false;
+      appRef.current = null;
       if (app) app.destroy();
     };
   }, [items, bend, textColor, borderRadius, font, fontUrl, scrollSpeed, scrollEase]);
+
+  useEffect(() => {
+    if (!selected) return;
+    const overlay = lightboxRef.current;
+
+    const findScroller = target => {
+      let node = target instanceof Element ? target : null;
+      while (node && node !== overlay) {
+        const overflowY = window.getComputedStyle(node).overflowY;
+        if (
+          (overflowY === 'auto' || overflowY === 'scroll') &&
+          node.scrollHeight > node.clientHeight + 1
+        ) {
+          return node;
+        }
+        node = node.parentElement;
+      }
+      return null;
+    };
+
+    const onScrollIntent = e => {
+      if (findScroller(e.target)) {
+        e.stopPropagation();
+        return;
+      }
+      e.preventDefault();
+      e.stopPropagation();
+    };
+
+    const onKeyDown = e => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        requestClose();
+        return;
+      }
+      const SCROLL_KEYS = [' ', 'ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End'];
+      if (SCROLL_KEYS.includes(e.key) && !findScroller(e.target)) {
+        e.preventDefault();
+      }
+    };
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    overlay?.addEventListener('wheel', onScrollIntent, { passive: false, capture: true });
+    overlay?.addEventListener('touchmove', onScrollIntent, { passive: false, capture: true });
+    window.addEventListener('keydown', onKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      overlay?.removeEventListener('wheel', onScrollIntent, true);
+      overlay?.removeEventListener('touchmove', onScrollIntent, true);
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [selected, requestClose]);
+
   return (
     <div
       className="circular-gallery"
@@ -651,6 +787,34 @@ export default function CircularGallery({
       tabIndex={0}
       role="region"
       aria-label="Circular image gallery. Use left and right arrow keys to navigate."
-    />
+    >
+      {selected &&
+        createPortal(
+          <div
+            className={`gallery-lightbox${isBackdropReady && !isClosing ? ' is-open' : ''}`}
+            ref={lightboxRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label={selected.text}
+            onClick={requestClose}
+          >
+            <div
+              className={`gallery-lightbox-inner${isClosing ? ' is-closing' : ''}`}
+              onClick={e => e.stopPropagation()}
+            >
+              <img
+                className="gallery-lightbox-image"
+                src={selected.image}
+                alt={selected.text}
+              />
+              <div className="gallery-lightbox-text">
+                <h3 className="gallery-lightbox-title">{selected.text}</h3>
+                <p className="gallery-lightbox-description">{selected.description}</p>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
+    </div>
   );
 }

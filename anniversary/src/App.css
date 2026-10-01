@@ -60,6 +60,27 @@
   font-size: 11.5vw;
 }
 
+.hero-section .tilted-card-img {
+  animation: hero-zoom-in 1.2s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes hero-zoom-in {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-section .tilted-card-img {
+    animation: none;
+  }
+}
+
 .gallery-section {
   position: relative;
   width: 100vw;
@@ -79,6 +100,7 @@
 }
 
 .gallery-text {
+  font-family: 'Figtree', sans-serif;
   font-size: 3rem;
   color: rgba(219, 201, 100, 0.8);
   text-shadow: 0 2px 8px rgba(0, 0, 0, 0.4), 0 0 60px rgba(255, 255, 255, 0.15), 0 0 120px rgba(255, 255, 255, 0.05);
@@ -113,6 +135,7 @@
 
 .letter-text {
   max-width: 60rem;
+  font-family: 'Figtree', sans-serif;
   font-size: clamp(1.15rem, 1.7vw, 1.6rem);
   line-height: 1.8;
   color: rgba(219, 201, 100, 0.8);
@@ -134,6 +157,8 @@
   align-items: center;
   justify-content: center;
   width: 100%;
+  transform-origin: center center;
+  will-change: transform, opacity;
 }
 
 .letter-image .tilted-card-img {
